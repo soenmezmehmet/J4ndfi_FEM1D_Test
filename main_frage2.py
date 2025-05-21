@@ -14,7 +14,6 @@ Created on Wed May 21 17:32:25 2025
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 from assemble import element_stiffness_force
 from apply_bc import apply_bc_slicing
 
@@ -27,11 +26,10 @@ rho = 7850         # Dichte (kg/m³)
 g = 9.81
 f_body = -rho * g  # Körperkraft (Eigengewicht)
 nqp = 3            # Anzahl der Gauß-Integrationspunkte (nötig für nen=3)
-nel = 10           # Anzahl der Elemente
+nel = 3           # Anzahl der Elemente
 
-# Teste beide Fälle: linear (nen=2), quadratisch (nen=3)
+# Vergleich für nen=2 (linear) und nen=3 (quadratisch)
 nen_list = [2, 3]
-
 plt.figure()
 
 for nen in nen_list:
@@ -61,10 +59,12 @@ for nen in nen_list:
     u_free = np.linalg.solve(K_mod, f_mod)
     u[free_dofs] = u_free
 
-    # Visualisierung der Verschiebungskurve
-    label = "linear (nen=2)" if nen == 2 else "quadratisch (nen=3)"
+
+    # Visualisierung: Verschiebungskurven vergleichen
+    label = f"{'Linear' if nen == 2 else 'Quadratisch'} (nen={nen})"
     plt.plot(x_nodes, u, marker='o', label=label)
 
+# Gesamtdiagramm
 plt.xlabel("x (m)")
 plt.ylabel("u(x) (m)")
 plt.title("Vergleich: Lineare vs. Quadratische Formfunktionen")
