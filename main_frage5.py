@@ -98,4 +98,4 @@ for n_seile, sicherheitsfaktor in [(2, 16), (3, 12)]:
     if abs(F_berechnet) <= F_erlaubt:
         print("Sicherheit ist eingehalten.")
     else:
-        print("Sicherheit ist NICHT eingehalten.")
+        print("Sicherheit ist nicht eingehalten.")
