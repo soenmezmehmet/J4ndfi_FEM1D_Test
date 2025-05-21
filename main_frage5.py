@@ -80,20 +80,22 @@ plt.show()
 
 
 # Frage 5 - Sicherheitsanalyse
-F_min = 121000        # Mindestbruchkraft pro Seil (N)
-n_seile = 3           # Anzahl der Seile
-sicherheitsfaktor = 12
-F_erlaubt = (F_min * n_seile) / sicherheitsfaktor
-
-sigma_max = np.max(stress)       # maximale Spannung
-F_berechnet = sigma_max * A      # tatsächliche Kraft im Seil
+F_min = 121000     # Mindestbruchkraft pro Seil (N)
+sigma_max = np.max(stress)       # maximale Spannung im Seil
+F_berechnet = sigma_max * A      # tatsächliche Zugkraft im Seil
 
 print("\nSicherheitsprüfung:")
-print(f"Erlaubte maximale Gesamtkraft (mit Sicherheitsfaktor): {F_erlaubt:.2f} N")
-print(f"Maximale berechnete Kraft im Seil: {abs(F_berechnet):.2f} N")
-print(f"Maximale Spannung im Seil: {abs(sigma_max/1e6):.2f} MPa")
 
-if F_berechnet <= F_erlaubt:
-    print("Die vorgeschriebene Sicherheit ist eingehalten.")
-else:
-    print("Die vorgeschriebene Sicherheit ist NICHT eingehalten!")
+# Jetzt für beide Szenarien (2 und 3 Seile mit verschiedenen Faktoren)
+for n_seile, sicherheitsfaktor in [(2, 16), (3, 12)]:
+    F_erlaubt = (F_min * n_seile) / sicherheitsfaktor
+    
+    print(f"\n--- Analyse für {n_seile} Seile mit {sicherheitsfaktor}-fachem Sicherheitsfaktor ---")
+    print(f"Erlaubte maximale Gesamtkraft: {F_erlaubt:.2f} N")
+    print(f"Maximale berechnete Kraft im Seil: {abs(F_berechnet):.2f} N")
+    print(f"Maximale Spannung im Seil: {abs(sigma_max / 1e6):.2f} MPa")
+
+    if abs(F_berechnet) <= F_erlaubt:
+        print("Sicherheit ist eingehalten.")
+    else:
+        print("Sicherheit ist NICHT eingehalten.")
