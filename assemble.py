@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue May 20 15:30:45 2025
 
-@author: wanghuating
-"""
 
 # Datei: assemble.py
 # --------------------------
