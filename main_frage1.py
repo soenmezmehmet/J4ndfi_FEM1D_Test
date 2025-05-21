@@ -20,9 +20,9 @@ from apply_bc import apply_bc_slicing
 # --------------------------
 # Globale Parameterdefinition
 # --------------------------
-L = 10.0           # Seillänge (Länge des Stabs)
+L = 70.0           # Seillänge (Länge des Stabs)
 E = 2e11           # Elastizitätsmodul (Pa)
-A = 1e-4           # Querschnittsfläche (m²)
+A = 89.9e-6           # Querschnittsfläche (m²)
 EA = E * A         # Axiale Steifigkeit
 rho = 7850         # Dichte (kg/m³)
 g = 9.81           # Erdbeschleunigung (m/s²)
