@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon May 19 14:08:34 2025
 
-@author: wanghuating
-"""
 
 # Datei: main.py
 # --------------------------
