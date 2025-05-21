@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue May 20 15:29:03 2025
 
-@author: wanghuating
-"""
 
 # Datei: shape1d.py
 # --------------------------
