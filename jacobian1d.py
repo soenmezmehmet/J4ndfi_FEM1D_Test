@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue May 20 15:30:26 2025
 
-@author: wanghuating
-"""
 
 # Datei: jacobian1d.py
 # --------------------------
