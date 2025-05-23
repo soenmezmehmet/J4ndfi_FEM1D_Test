@@ -169,23 +169,48 @@ def shape1d(xi: float, nen: int) -> Tuple[torch.Tensor, torch.Tensor]:
     return N, gamma
 
 
-# """
-# % Abbildung zum und vom Masterelement:
-# % Entspricht der "Jacobian"-Matrix
-# % xe: Globale Koordinaten der Knoten eines Elementes
-# % gamma: Ableitungen der Formfunktionen (Shape Functions) am Masterelement
-# % nen: Number of Element Nodes
-# % Ausgabe: Determinante der Jacobian-Matrix und Inverse der Jacobian
-# """
-# def jacobian1d (xe, gamma, nen):
+def jacobian1d(xe: torch.Tensor, gamma: torch.Tensor, nen: int) -> Tuple[float, float]:
+    """
+    Computes the Jacobian determinant and its inverse for a 1D element.
 
-#     #TODO
-#     if detJq <= 0:
-#         raise ("Error: detJq = ", detJq, "<= 0")
+    Parameters
+    ----------
+    xe : torch.Tensor
+        Global coordinates of the element's nodes, shape (nen,) or (nen, 1).
+    
+    gamma : torch.Tensor
+        Derivatives of the shape functions w.r.t. the local coordinate ξ, shape (nen,) or (nen, 1).
+    
+    nen : int
+        Number of nodes in the element (2 for linear, 3 for quadratic).
 
-#     invJq = 1/detJq
+    Returns
+    -------
+    detJq : float
+        Determinant of the Jacobian matrix (scalar in 1D).
+    
+    invJq : float
+        Inverse of the Jacobian determinant.
 
-#     return (detJq, invJq)
+    Raises
+    ------
+    ValueError
+        If the determinant is non-positive or nen is unsupported.
+    """
+    if nen not in (2, 3):
+        raise ValueError("Invalid number of element nodes. Supported values are 2 or 3.")
+
+    # flatten both tensors in case they're (nen, 1)
+    xe_flat = xe.view(-1)
+    gamma_flat = gamma.view(-1)
+    # det(J) = sum_A^nen (gamma_A * xe_A)
+    detJq = torch.dot(gamma_flat, xe_flat).item()  # scalar float
+
+    if detJq <= 0:
+        raise ValueError("Jacobian determinant is non-positive. Check element connectivity or node order.")
+
+    invJq = 1.0 / detJq
+    return detJq, invJq
 
 
 # ########### SOLVER  ############
