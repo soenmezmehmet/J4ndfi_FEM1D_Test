@@ -112,38 +112,54 @@ def gauss1d(nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
         raise ValueError("Invalid number of quadrature points. Supported values are 1, 2, or 3.")
     return xi, w8
 
-            
 
+def shape1d(xi: float, nen: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Evaluates the Lagrange shape functions and their derivatives at a local coordinate ξ.
 
-"""
-% Auswertung der Formfunktionen (Lagrange-Polynome) [N] und ihrer Ableitungen [gamma]
-%% an der (elementlokalen) Positionen [xi] bei [nen] Knoten im Element
-%% für das Masterelement
-"""
-def shape1d(xi, nen):
-    # define element nodes
+    Parameters
+    ----------
+    xi : float
+        Local coordinate within the reference (master) element, ξ ∈ [-1, 1].
+
+    nen : int
+        Number of nodes in the element.
+        - 2 nodes → linear shape functions
+        - 3 nodes → quadratic shape functions
+
+    Returns
+    -------
+    N : torch.Tensor
+        Column vector of shape function values at ξ, shape (nen, 1).
+
+    gamma : torch.Tensor
+        Column vector of shape function derivatives with respect to ξ, shape (nen, 1).
+
+    Notes
+    -----
+    - This function assumes `nen` is either 2 or 3. Input validity should be handled by the caller.
+    - For efficiency, caching of intermediate factors could reduce repeated computation,
+      but increases memory use slightly.
+    """
+    # define element nodes (in master element coordinates)
     xi_nodes = [-1, 1] if nen == 2 else [-1, 0, 1]
-    # NOTE : safety check for nen must be done in the calling function
+
     # define output arrays
     N = torch.zeros(nen, 1)
     gamma = torch.zeros(nen, 1)
 
-    for i in range(nen): # iterate i over all nodes
+    for i in range(nen):  # iterate i over all nodes
         L = 1.0
         dL = 0.0
-        for j in range(nen): # iterate j over all nodes
+        for j in range(nen):  # for shape function N_i
             if i != j:
-                # product for Lagrange polynomial
                 L *= (xi - xi_nodes[j]) / (xi_nodes[i] - xi_nodes[j])
         N[i] = L
-        
-        # NOTE: If factors are cached, only one j loop is needed
-        # (but increase memory usage)
-        # derivative of Lagrange polynomial
-        for j in range(nen): # iterate j over all nodes
+
+        for j in range(nen):  # for derivative dN_i/dξ
             if i != j:
                 prod = 1.0
-                for k in range(nen): # iterate k over all nodes
+                for k in range(nen):
                     if k != i and k != j:
                         prod *= (xi - xi_nodes[k]) / (xi_nodes[i] - xi_nodes[k])
                 dL += prod / (xi_nodes[i] - xi_nodes[j])
@@ -151,6 +167,7 @@ def shape1d(xi, nen):
         gamma[i] = dL
 
     return N, gamma
+
 
 # """
 # % Abbildung zum und vom Masterelement:
