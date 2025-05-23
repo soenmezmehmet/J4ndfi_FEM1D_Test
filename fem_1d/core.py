@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import math
+from typing import Tuple
 
 torch.set_default_dtype(torch.float64)
 torch.set_num_threads(4)
@@ -76,13 +77,28 @@ torch.set_num_threads(4)
 # fvol = #TODO
 # frea = #TODO
 
-"""
-% Parameter fuer die Gauss-Quadratur
-%% xi sind die Stellen, an denen die Funktion ausgewertet wird
-%% w8 die "weights" -- zugehörige Gewichte in der Summenformel
-%% Eingabe: nqp, die Anzahl der Gauss-Quadratur-Punkte (nicht Element-Knoten!!)
-"""
-def gauss1d(nqp):
+def gauss1d(nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Returns Gauss quadrature points and weights for numerical integration over [-1, 1].
+
+    Parameters
+    ----------
+    nqp : int
+        Number of quadrature points (supported: 1, 2, or 3).
+
+    Returns
+    -------
+    xi : torch.Tensor
+        Quadrature points (locations ξ_i where the function is evaluated), shape (nqp,).
+    
+    w8 : torch.Tensor
+        Corresponding weights α_i for the quadrature formula, shape (nqp,).
+
+    Raises
+    ------
+    ValueError
+        If nqp is not 1, 2, or 3.
+    """
     if nqp == 1:
         xi = torch.tensor([0.0])
         w8 = torch.tensor([2.0])
