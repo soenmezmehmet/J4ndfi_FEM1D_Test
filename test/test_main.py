@@ -1,7 +1,7 @@
 import unittest
 import torch
 import math
-from fem_1d.core import shape1d, gauss1d
+from fem_1d.core import shape1d, gauss1d, jacobian1d
 
 
 class TestShape1D(unittest.TestCase):
@@ -67,6 +67,38 @@ class TestGauss1D(unittest.TestCase):
     def test_invalid_nqp_raises(self):
         with self.assertRaises(ValueError):
             gauss1d(4)
+           
+
+class TestJacobian1D(unittest.TestCase):
+
+    def test_linear_element(self):
+        # Nodes at x = 2 and x = 4 → element length = 2
+        xe = torch.tensor([2.0, 4.0])  # shape (2,)
+        gamma = torch.tensor([-0.5, 0.5])  # derivatives for linear shape functions at any xi
+        detJq, invJq = jacobian1d(xe, gamma, nen=2)
+        self.assertAlmostEqual(detJq, 1.0, places=12, msg="detJq should be 1.0 for uniform linear element")
+        self.assertAlmostEqual(invJq, 1.0, places=12, msg="invJq should be 1.0 for uniform linear element")
+
+    def test_quadratic_element(self):
+        # Nodes at x = 1, 2, 3 (symmetric spacing)
+        xe = torch.tensor([1.0, 2.0, 3.0])
+        # gamma at xi = 0 for 3-node element
+        gamma = torch.tensor([-0.5, 0.0, 0.5])
+        detJq, invJq = jacobian1d(xe, gamma, nen=3)
+        self.assertAlmostEqual(detJq, 1.0, places=12, msg="detJq should be 1.0 for symmetric quadratic element")
+        self.assertAlmostEqual(invJq, 1.0, places=12, msg="invJq should be 1.0 for symmetric quadratic element")
+
+    def test_negative_determinant_raises(self):
+        xe = torch.tensor([4.0, 2.0])  # flipped nodes
+        gamma = torch.tensor([-0.5, 0.5])
+        with self.assertRaises(ValueError):
+            jacobian1d(xe, gamma, nen=2)
+
+    def test_invalid_nen_raises(self):
+        xe = torch.tensor([0.0, 1.0, 2.0, 3.0])
+        gamma = torch.tensor([0.0, 0.0, 0.0, 0.0])
+        with self.assertRaises(ValueError):
+            jacobian1d(xe, gamma, nen=4)
 
 if __name__ == "__main__":
     unittest.main()
