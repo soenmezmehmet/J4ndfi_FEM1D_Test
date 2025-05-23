@@ -1,6 +1,6 @@
-#% ========================================================================
+# ========================================================================
 # Numerische Implementierung der linearen FEM
-#% TU Berlin
+# TU Berlin
 # Institute für Mechanik
 # ========================================================================
 # Finite Element Code for 1d elements
@@ -15,67 +15,69 @@ from typing import Tuple
 torch.set_default_dtype(torch.float64)
 torch.set_num_threads(4)
 
-# disp_scaling = 1000
-# toplot = True
-# ############ Input ###############
+disp_scaling = 1000
+toplot = True
+############ Input ###############
 
-# # Define coordinates as a column vector
-# # Hint: row entries - global node number
-# #       column entries - corresponding x coordinates
-# # x = [x1 ; x2 ; x3 ; x4 ; x5]
-# #
-# x = torch.reshape(torch.linspace(0, 70, 11), [-1, 1])
-# print("x: ", x)
-# # Define connectivity list as a matrix
-# # between local and global node numbers
-# # Hint: No. of rows in the 'conn' matrix = No. of elements
-# #       No. of columns in the 'conn' matrix = Element node numbering
-# # conn  | Global list
-# # --------------------
-# # e = 1 | 1  3  2
-# # e = 2 | 3  5  4
-# #
-# conn = torch.from_numpy(np.array([[1,  3,  2], [3,  5,  4], [5,  7,  6], [7,  9,  8], [9,  11,  10]]))
+# Define coordinates as a column vector
+# Hint: row entries - global node number
+#       column entries - corresponding x coordinates
+# x = [x1 ; x2 ; x3 ; x4 ; x5]
+x = torch.reshape(torch.linspace(0, 70, 11), [-1, 1])
+print("x: ", x)
 
-# # Number of quadrature points per Element, nqp
-# nqp = 2
+# Define connectivity list as a matrix
+# between local and global node numbers
+# Hint: No. of rows in the 'conn' matrix = No. of elements
+#       No. of columns in the 'conn' matrix = Element node numbering
+# conn  | Global list
+# --------------------
+# e = 1 | 1  3  2
+# e = 2 | 3  5  4
+#
+conn = torch.from_numpy(np.array([[1,  3,  2], [3,  5,  4], [5,  7,  6], [7,  9,  8], [9,  11,  10]]))
 
-# # Boundary conditions
-# drltDofs = torch.from_numpy(np.array([1])) # Global DOF numbers where Dirichlet DOF 's are prescribed
-# freeDofs = torch.from_numpy(np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11])) # Global DOF numbers where displacement is unknown, Free DOF's
-# u_d = torch.from_numpy(np.array([0.]) )# Value of the displacement at the prescribed nodes
+# Number of quadrature points per Element, nqp
+nqp = 2
 
-# f_sur = torch.from_numpy(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (300 + 75) * 9.81]))
+# Boundary conditions
+drltDofs = torch.from_numpy(np.array([1])) # Global DOF numbers where Dirichlet DOF 's are prescribed
+freeDofs = torch.from_numpy(np.array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11])) # Global DOF numbers where displacement is unknown, Free DOF's
+u_d = torch.from_numpy(np.array([0.]) )# Value of the displacement at the prescribed nodes
 
-# # Constant body force
-# b = 7850 * 9.81
+# define force on last node
+f_sur = torch.from_numpy(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (300 + 75) * 9.81]))
 
-# # Material parameters for the two elements
-# E = 2.1e11 * torch.ones(conn.size()[0], 1);
-# area = 3 * 89.9e-6 * torch.ones(conn.size()[0], 1);  ##
+# Constant body force (constant volume force)
+b = 7850 * 9.81
 
-# #% Fuer die Ausgabe: Verschiebungen um Faktor ueberhoehen
-# scalingfactor = 1
+# Material parameters for the two elements
+E = 2.1e11 * torch.ones(conn.size()[0], 1)
+area = 3 * 89.9e-6 * torch.ones(conn.size()[0], 1) # assign cross-sectional area to all elements
 
-# ############ Preprocessing ###############
-# # Extract nnp, ndm and ndf from the vector 'x'
-# # Hint: use MATLAB function size()
-# nnp = #TODO
-# print("nnp: ", nnp)
-# ndm = #TODO
-# ndf = #TODO
+# Fuer die Ausgabe: Verschiebungen um Faktor ueberhoehen
+scalingfactor = 1
 
-# # Extract nel and nen from the matrix 'conn'
-# # Hint: use MATLAB function size()
-# #TODO
-# #TODO
-# #############Solver#############
-# # Initialisation of global vectors and matrix
-# u = #TODO
-# K = #TODO
-# fext = #TODO
-# fvol = #TODO
-# frea = #TODO
+############ Preprocessing ###############
+# Extract nnp, ndm and ndf from the vector 'x'
+# Hint: use MATLAB function size()
+nnp = x.size()[0] # number of nodal points (nodes)
+print("nnp: ", nnp)
+ndm = x.size()[1] # number of dimensions (1D)
+ndf = 1 # number of degrees of freedom (1D)
+
+# Extract nel and nen from the matrix 'conn'
+nel = conn.size()[0]  # number of elements
+nen = conn.size()[1]  # number of element nodes (2 or 3)
+
+#############Solver#############
+# Initialisation of global vectors and matrix
+u = torch.zeros(nnp * ndf, 1)     # displacement vector
+K = torch.zeros(nnp * ndf, nnp * ndf)  # global stiffness matrix
+fext = torch.zeros(nnp * ndf, 1)  # total external force vector
+fvol = torch.zeros(nnp * ndf, 1)  # body force vector
+frea = torch.zeros(nnp * ndf, 1)  # reaction forces (Dirichlet nodes)
+
 
 def gauss1d(nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
     """
