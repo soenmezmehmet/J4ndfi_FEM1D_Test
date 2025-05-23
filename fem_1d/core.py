@@ -76,22 +76,34 @@ torch.set_num_threads(4)
 # fvol = #TODO
 # frea = #TODO
 
-# """
-# % Parameter fuer die Gauss-Quadratur
-# %% xi sind die Stellen, an denen die Funktion ausgewertet wird
-# %% w8 die "weights" -- zugehörige Gewichte in der Summenformel
-# %% Eingabe: nqp, die Anzahl der Gauss-Quadratur-Punkte (nicht Element-Knoten!!)
-# """
-# def gauss1d (nqp):
-#     #TODO
-#     return (xi, w8)
+"""
+% Parameter fuer die Gauss-Quadratur
+%% xi sind die Stellen, an denen die Funktion ausgewertet wird
+%% w8 die "weights" -- zugehörige Gewichte in der Summenformel
+%% Eingabe: nqp, die Anzahl der Gauss-Quadratur-Punkte (nicht Element-Knoten!!)
+"""
+def gauss1d(nqp):
+    if nqp == 1:
+        xi = torch.tensor([0.0])
+        w8 = torch.tensor([2.0])
+    elif nqp == 2:
+        xi = torch.tensor([-1.0 / math.sqrt(3), 1.0 / math.sqrt(3)])
+        w8 = torch.tensor([1.0, 1.0])
+    elif nqp == 3:
+        xi = torch.tensor([-math.sqrt(3 / 5), 0.0, math.sqrt(3 / 5)])
+        w8 = torch.tensor([5.0 / 9, 8.0 / 9, 5.0 / 9])
+    else:
+        raise ValueError("Invalid number of quadrature points. Supported values are 1, 2, or 3.")
+    return xi, w8
+
+            
 
 
-# """
-# % Auswertung der Formfunktionen (Lagrange-Polynome) [N] und ihrer Ableitungen [gamma]
-# %% an der (elementlokalen) Positionen [xi] bei [nen] Knoten im Element
-# %% für das Masterelement
-# """
+"""
+% Auswertung der Formfunktionen (Lagrange-Polynome) [N] und ihrer Ableitungen [gamma]
+%% an der (elementlokalen) Positionen [xi] bei [nen] Knoten im Element
+%% für das Masterelement
+"""
 def shape1d(xi, nen):
     # define element nodes
     xi_nodes = [-1, 1] if nen == 2 else [-1, 0, 1]
