@@ -80,6 +80,10 @@ class Fem1D:
         self.fext = torch.zeros(self.nnp, 1)  # total external force vector
         self.fvol = torch.zeros(self.nnp, 1)  # body force vector
         self.frea = torch.zeros(self.nnp, 1)  # reaction forces (Dirichlet nodes)
+        # initialize result tensors
+        self.eps = torch.zeros(self.nel * self.nqp, 1)  # strains at Gauss points
+        self.sigma = torch.zeros(self.nel * self.nqp, 1)  # stresses at Gauss points
+        self.x_eps = torch.zeros(self.nel * self.nqp, 1)  # spatial locations at Gauss points
 
     def gauss1d(self, nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -273,11 +277,6 @@ class Fem1D:
         # calculate reaction forces at Dirichlet boundary conditions
         self.frea = self.K @ self.u - self.fext
 
-        # initialize output tensors
-        eps = torch.zeros(self.nel * self.nqp, 1)
-        sigma = torch.zeros(self.nel * self.nqp, 1)
-        x_eps = torch.zeros(self.nel * self.nqp, 1)
-
         for e in range(self.nel):  # loop over all elements
             # get global coordinates of the element nodes
             xe = self.x[self.conn[e, :] - 1]
@@ -290,15 +289,15 @@ class Fem1D:
                 G = gamma * invJq
 
                 # use derivatives of shape functions, G, to calculate eps as spatial derivative of u
-                eps[e * self.nqp + q] = torch.tensordot(self.u[self.conn[e, :] - 1].T, G, dims=[[1], [0]])
+                self.eps[e * self.nqp + q] = torch.tensordot(self.u[self.conn[e, :] - 1].T, G, dims=[[1], [0]])
                 # calculate stresses from strains and Young's modulus (i.e. apply Hooke's law)
-                sigma[e * self.nqp + q] = self.E[e, 0] * eps[e * self.nqp + q]
+                self.sigma[e * self.nqp + q] = self.E[e, 0] * self.eps[e * self.nqp + q]
                 # create x-axis vector to plot eps, sigma in the Gauss points (not at the nodes!)
-                x_eps[e * self.nqp + q] = torch.tensordot(xe, N, dims=[[0], [0]])
+                self.x_eps[e * self.nqp + q] = torch.tensordot(xe, N, dims=[[0], [0]])
 
-        return eps, sigma, x_eps
+        return self.eps, self.sigma, self.x_eps
 
-    def plot(self, eps: torch.Tensor, sigma: torch.Tensor, x_eps: torch.Tensor) -> None:
+    def plot(self) -> None:
         """
         Plot the deformed shape, displacement, force vectors, and stress field.
         """
@@ -321,7 +320,7 @@ class Fem1D:
         plt.title("Forces")
 
         plt.subplot(4, 1, 4)
-        plt.plot(x_eps, sigma, 'x-')
+        plt.plot(self.x_eps, self.sigma, 'x-')
         plt.title("Stress at Gauss Points")
 
         plt.tight_layout()
@@ -341,8 +340,8 @@ if __name__ == "__main__":
     u_d = torch.tensor([0.])
     drltDofs = torch.tensor([1])
 
-    fem = Fem1D(x, conn, E, area, b, f_sur, u_d, drltDofs, nqp=2, scalingfactor=1)
+    fem = Fem1D(x, conn, E, area, b, f_sur, u_d, drltDofs, nqp=2, scalingfactor=100)
     fem.preprocess()
     fem.solve()
-    eps, sigma, x_eps = fem.postprocess()
-    fem.plot(eps, sigma, x_eps)
+    fem.postprocess()
+    fem.plot()
