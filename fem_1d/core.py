@@ -297,6 +297,19 @@ class Fem1D:
 
         return self.eps, self.sigma, self.x_eps
 
+    def report(self) -> None:
+            print(
+                f"""
+    ===== FEM Simulation Summary =====
+    Displacement @ node {self.drltDofs.item()}: {self.u[self.drltDofs - 1].item():.4e} m
+    Max displacement         : {torch.max(torch.abs(self.u)).item():.4e} m
+    Max stress (σ)           : {torch.max(torch.abs(self.sigma)).item():.4e} Pa
+    Reaction force           : {self.frea[self.drltDofs - 1].item():.2f} N
+    ==================================
+    """
+            )
+
+
     def plot(self) -> None:
         """
         Plot the deformed shape, displacement, force vectors, and stress field.
@@ -344,4 +357,5 @@ if __name__ == "__main__":
     fem.preprocess()
     fem.solve()
     fem.postprocess()
+    fem.report()
     fem.plot()
