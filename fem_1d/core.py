@@ -35,7 +35,11 @@ print("x: ", x)
 # e = 1 | 1  3  2
 # e = 2 | 3  5  4
 #
+conn_reorder = True  # used to reorder the connectivity list to [1, 2, 3] instead of [1, 3, 2]
 conn = torch.from_numpy(np.array([[1,  3,  2], [3,  5,  4], [5,  7,  6], [7,  9,  8], [9,  11,  10]]))
+if conn_reorder:
+    conn = conn[:, [0, 2, 1]]
+
 
 # Number of quadrature points per Element, nqp
 nqp = 2
@@ -69,14 +73,7 @@ ndf = 1 # number of degrees of freedom (1D)
 # Extract nel and nen from the matrix 'conn'
 nel = conn.size()[0]  # number of elements
 nen = conn.size()[1]  # number of element nodes (2 or 3)
-
-#############Solver#############
-# Initialisation of global vectors and matrix
-u = torch.zeros(nnp * ndf, 1)     # displacement vector
-K = torch.zeros(nnp * ndf, nnp * ndf)  # global stiffness matrix
-fext = torch.zeros(nnp * ndf, 1)  # total external force vector
-fvol = torch.zeros(nnp * ndf, 1)  # body force vector
-frea = torch.zeros(nnp * ndf, 1)  # reaction forces (Dirichlet nodes)
+# NOTE: redundant? already defined as nqp
 
 
 def gauss1d(nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -215,122 +212,105 @@ def jacobian1d(xe: torch.Tensor, gamma: torch.Tensor, nen: int) -> Tuple[float, 
     return detJq, invJq
 
 
-# ########### SOLVER  ############
+#############Solver#############
+# Initialisation of global vectors and matrix
+u = torch.zeros(nnp * ndf, 1)     # displacement vector
+K = torch.zeros(nnp * ndf, nnp * ndf)  # global stiffness matrix
+fext = torch.zeros(nnp * ndf, 1)  # total external force vector
+fvol = torch.zeros(nnp * ndf, 1)  # body force vector
+frea = torch.zeros(nnp * ndf, 1)  # reaction forces (Dirichlet nodes)
 
-# #Initialisation of global vectors and matrix
-# u = torch.zeros(nnp*ndf, 1)
-# K = torch.zeros(nnp*ndf, nnp*ndf)
-# fext = torch.zeros(nnp*ndf, 1)
-# fvol = torch.zeros(nnp*ndf, 1)
-# frea = torch.zeros(nnp*ndf, 1)
+################ Create stiffness matrix and fvol ############
+for e in range(nel):  # loop over all elements
+    # get global coordinates of the element nodes
+    xe = x[conn[e, :] - 1]  # shape: (nen, 1)
+    # NOTE: conn[e, :] - 1 should be cached
 
-# ################ Create stiffness matrix and fvol ############
-# for e in range(nel):
+    # call the coordinates and weights of the gauss points
+    xi, w8 = gauss1d(nqp)  # shape: (nqp,)
 
-#     #Coordinates of the element nodes
-#     # Hint: to be extracted from the global coordinate list 'x'
-#     #       considering the 'conn' matrix
-#     xe = #TODO
-#     (xi, w8) = #TODO
+    for q in range(nqp):  # loop over all gauss points
+        xi_q = xi[q].item()
+        wq = w8[q].item()
+        # call the shape function and its derivatives
+        N, gamma = shape1d(xi_q, nen)  # shape: (nen, 1)
 
-#     # Call the coordinates and weights of the gauss points
-#     # Hint: input parameters - nqp
-#     #            output parameters - xi, w8
-#     #            function name - gauss1d
-#     #TODO
+        # calculate the Jacobian and its inverse
+        detJq, invJq = jacobian1d(xe, gamma, nen)  # floats
 
-#     # Loop over the gauss points, Summation over all gauss points 'q'
-#     for q in range(nqp):
-#         #% Call the shape functions and its derivatives
-#         # Hint: input parameters - xi(q), nen
-#         #       output parameters - N, gamma
-#         #       function name - shape1d
-#         #TODO
+        # gradient of the shape functions wrt. to x
+        G = gamma * invJq
 
-#         #% Determinant of Jacobian and the inverse of Jacobian
-#         # at the quadrature points q
-#         # Hint: For this 1d-case the Jacobian is a scalar of 1x1
-#         #       and its inverse also a scalar
-#         #TODO
+        for A in range(nen):  # loop over the number of nodes A
+            # add volume force contribution (body force)
+            fvol[conn[e, A]-1, 0] = fvol[conn[e, A]-1, 0] + N[A] * b * area[e] * detJq * wq
 
-#         #Gradient of the shape functions wrt. to x
-#         G = gamma*invJq
+            for B in range(nen):  # loop over the number of nodes A
+                K[conn[e, A]-1, conn[e, B]-1] = K[conn[e, A]-1, conn[e, B]-1] + E[e] * area[e] * G[A] * G[B] * detJq * wq
 
-#         #Loop over the number of nodes A
-#         for A in range(nen):
-#             # Volume force contribution
-#             fvol[conn[e, A]-1, 0] += #TODO
+# combine the force vectors
+fext = f_sur.reshape(-1, 1) + fvol
+# clone the global stiffness matrix
+solve_K = K.clone()
+# apply Dirichlet boundary conditions
+for i in range(drltDofs.size()[0]):
+    solve_K[drltDofs[i]-1, drltDofs[i]-1] = 1e30  # penalty method
 
-#             # Loop over the number of nodes A
-#             for B in range(nen):
-#                 K[conn[e, A]-1, conn[e, B]-1] += #TODO
+# solve the linear system
+u = torch.linalg.solve(solve_K, fext)
+# enforce exact values at Dirichlet DOFs
+u[drltDofs-1, 0] = u_d
 
-# ##### Include BC, solve the linear system K u = f ######
-# # Calculate nodal displacements => solve linear system
-# # Use "array slicing" or penalty method
-# solve_K = K
-# #print("solve_K:  ", solve_K)
-# for i in range(drltDofs.size()[0]):
-#     solve_K[drltDofs[i]-1, drltDofs[i]-1] = #TODO
+###### Process results: Calculate output quantities  #######
+# Compute the reaction forces at the Dirichlet boundary
+frea = torch.matmul(K, u) - fext
+frea[drltDofs-1, 0] = (K @ u - fext)[drltDofs - 1, 0]
+#Compute the total force vector
+fext = fvol + f_sur.reshape(-1, 1)
 
+# Calculate strains and stresses
+eps = torch.zeros(nel*nqp, 1)
+sigma = torch.zeros(nel*nqp, 1)
+x_eps = torch.zeros(nel*nqp, 1)
 
-# u [:, 0] = #TODO
-# u[drltDofs-1, 0] = #TODO
+for e in range(nel):  # loop over all elements
 
-# ###### Process results: Calculate output quantities  #######
-# # Compute the reaction forces at the Dirichlet boundary
-# frea[drltDofs-1, 0] = #TODO
-# #Compute the total force vector
-# fext = #TODO
+    # get global coordinates of the element nodes
+    xe = x[conn[e, :] - 1]  # (nen, 1)
+    (xi, w8) = gauss1d(nqp)  # (nqp,)
 
-# # Calculate strains and stresses
-# eps = torch.zeros(nel*nqp, 1)
-# sigma = torch.zeros(nel*nqp, 1)
-# x_eps = torch.zeros(nel*nqp, 1)
+    # for all Gauss points
+    for q in range(nqp):
+        N, gamma = shape1d(xi[q].item(), nen)
+        detJq, invJq = jacobian1d(xe, gamma, nen)
+        G = gamma*invJq
 
-# # for all elements
-# for e in range(nel):
+        # Use derivatives of shape functions, G, to calculate eps as spatial derivative of u
+        eps[e*nqp + q] = torch.tensordot(torch.transpose(u[conn[e, :]-1], 0, 1), G[:], dims=[[1], [0]])
+        # Calculate stresses from strains and Young's modulus (i.e. apply Hooke's law)
+        sigma[e * nqp + q] = E[e, 0]*eps[e*nqp + q]
+        # create x-axis vector to plot eps, sigma in the Gauss points (not at the nodes!)
+        x_eps[e*nqp + q] = torch.tensordot(xe, N[:])
 
-#     #Coordinates of the element nodes
-#     # Hint: to be extracted from the global coordinate list 'x'
-#     #       considering the 'conn' matrix
-#     xe = #TODO
-#     (xi, w8) = #TODO
+print("u: ", u)
+###### Post-processing/ plots ########
+plt.subplot(4,1,1)
+plt.plot(x, torch.zeros_like(x), 'ko-')
+plt.plot(x[drltDofs], -0.02*torch.ones_like(drltDofs), 'g^')
+plt.plot(x+scalingfactor*u, torch.zeros_like(x), 'o-')
+plt.plot(0, 1, 'k-')
 
-#     # for all Gauss points
-#     for q in range(nqp):
-#         # evaluate shape functions (as above)
-#         # evaluate jacobian
+plt.subplot(4, 1, 2)
+plt.plot(x, u, 'x-')
+plt.legend("u")
 
-#         # Gradient of the shape functions wrt. to x
-#         G = gamma*invJq
+plt.subplot(4,1,3)
+plt.plot(x, fext, 'ro')
+plt.plot(x, fvol, 'cx')
+plt.plot(x, frea, 'bx')
+plt.legend(["$f_{ext}$", "$f_{vol}$", "$f_{rea}$"])
 
-#         # Use derivatives of shape functions, G, to calculate eps as spatial derivative of u
-#         eps[e*nqp + q] = torch.tensordot(torch.transpose(u[conn[e, :]-1], 0, 1), G[:], dims=[[1],[0]])
-#         # Calculate stresses from strains and Young's modulus (i.e. apply Hooke's law)
-#         sigma[e * nqp + q] = E[e, 0]*eps[e*nqp + q]
-#         # create x-axis vector to plot eps, sigma in the Gauss points (not at the nodes!)
-#         x_eps[e*nqp + q] = torch.tensordot(xe, N[:])
+plt.subplot(4,1,4)
+plt.plot(x_eps, sigma, 'x-')
 
-# print("u: ", u)
-# ###### Post-processing/ plots ########
-# plt.subplot(4,1,1)
-# plt.plot(x, torch.zeros_like(x), 'ko-')
-# plt.plot(x[drltDofs], -0.02*torch.ones_like(drltDofs), 'g^')
-# plt.plot(x+scalingfactor*u, torch.zeros_like(x), 'o-')
-# plt.plot(0, 1, 'k-')
-
-# plt.subplot(4, 1, 2)
-# plt.plot(x, u, 'x-')
-# plt.legend("u")
-
-# plt.subplot(4,1,3)
-# plt.plot(x, fext, 'ro')
-# plt.plot(x, fvol, 'cx')
-# plt.plot(x, frea, 'bx')
-# plt.legend(["$f_{ext}$", "$f_{vol}$", "$f_{rea}$"])
-
-# plt.subplot(4,1,4)
-# plt.plot(x_eps, sigma, 'x-')
-
-# plt.show()
+plt.show()
