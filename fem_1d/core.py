@@ -224,8 +224,8 @@ class Fem1D:
         """
         for e in range(self.nel):  # loop over all elements
             # get global coordinates of the element nodes
-            xe = self.x[self.conn[e, :] - 1]  # shape: (nen, 1)
-            # NOTE: conn[e, :] - 1 should be cached
+            e_mask = self.conn[e, :] - 1
+            xe = self.x[e_mask]  # shape: (nen, 1)
 
             # call the coordinates and weights of the Gauss points
             xi, w8 = self.gauss1d(self.nqp)
@@ -245,11 +245,11 @@ class Fem1D:
 
                 for A in range(self.nen):  # loop over the number of nodes A
                     # add volume force contribution (body force)
-                    a = self.conn[e, A] - 1
-                    self.fvol[a] += N[A] * self.b * self.area[e] * detJq * wq
+                    a = e_mask[A]
+                    self.fvol[e_mask[A]] += N[A] * self.b * self.area[e] * detJq * wq
 
                     for B in range(self.nen):  # loop over the number of nodes B
-                        b = self.conn[e, B] - 1
+                        b = e_mask[B]
                         self.K[a, b] = self.K[a, b] + self.E[e] * self.area[e] * G[A] * G[B] * detJq * wq
 
         # combine the force vectors
