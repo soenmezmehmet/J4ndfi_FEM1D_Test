@@ -303,7 +303,7 @@ class Fem1D:
         """
         plt.subplot(4, 1, 1)
         plt.plot(self.x, torch.zeros_like(self.x), 'ko-')
-        plt.plot(self.x[self.drltDofs], -0.02 * torch.ones_like(self.drltDofs), 'g^')
+        plt.plot(self.x[self.drltDofs - 1], -0.02 * torch.ones_like(self.drltDofs), 'g^')
         plt.plot(self.x + self.scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
         plt.title("Deformed shape")
 
