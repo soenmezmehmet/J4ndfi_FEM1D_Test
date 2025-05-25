@@ -91,21 +91,25 @@ class Fem1D:
         self.nqp = nqp
         self.scalingfactor = scalingfactor
         # derived parameters
-        self.nnp = x.size(0)
-        self.ndf = 1
-        self.ndm = 1
-        self.nel = conn.size(0)
-        self.nen = conn.size(1)
+        self.shape = {
+            "nnp": x.size(0),  # number of nodal points
+            "ndf": 1,  # number of degrees of freedom per node (1D problem)
+            "ndm": 1,  # number of dimensions (1D problem)
+            "nel": conn.size(0),  # number of elements
+            "nen": conn.size(1)  # number of nodes per element (2 or 3)
+        }
         # solver initialization
-        self.K = torch.zeros(self.nnp, self.nnp)  # global stiffness matrix
-        self.u = torch.zeros(self.nnp, 1)  # displacement vector
-        self.fext = torch.zeros(self.nnp, 1)  # total external force vector
-        self.fvol = torch.zeros(self.nnp, 1)  # body force vector
-        self.frea = torch.zeros(self.nnp, 1)  # reaction forces (Dirichlet nodes)
+        self.K = torch.zeros(self.shape["nnp"], self.shape["nnp"])  # global stiffness matrix
+        self.u = torch.zeros(self.shape["nnp"], 1)  # displacement vector
+        self.fext = torch.zeros(self.shape["nnp"], 1)  # total external force vector
+        self.fvol = torch.zeros(self.shape["nnp"], 1)  # body force vector
+        self.frea = torch.zeros(self.shape["nnp"], 1)  # reaction forces (Dirichlet nodes)
         # initialize result tensors
-        self.eps = torch.zeros(self.nel * self.nqp, 1)  # strains at Gauss points
-        self.sigma = torch.zeros(self.nel * self.nqp, 1)  # stresses at Gauss points
-        self.x_eps = torch.zeros(self.nel * self.nqp, 1)  # spatial locations at Gauss points
+        self.results = {
+            "eps": torch.zeros(self.shape["nel"] * self.nqp, 1),  # strains at Gauss points
+            "sigma": torch.zeros(self.shape["nel"] * self.nqp, 1),  # stresses at Gauss points
+            "x_eps": torch.zeros(self.shape["nel"] * self.nqp, 1)  # spatial locations at Gauss points
+        }
 
     def gauss1d(self, nqp: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -232,19 +236,19 @@ class Fem1D:
         xe_flat = xe.view(-1)
         gamma_flat = gamma.view(-1)
         # det(J) = sum_A^nen (gamma_A * xe_A)
-        detJq = torch.dot(gamma_flat, xe_flat).item()
+        det_jq = torch.dot(gamma_flat, xe_flat).item()
 
-        if detJq <= 0:
+        if det_jq <= 0:
             raise ValueError("Jacobian determinant is non-positive. Check element connectivity or node order.")
 
-        invJq = 1.0 / detJq
-        return detJq, invJq
+        inv_jq = 1.0 / det_jq
+        return det_jq, inv_jq
 
     def preprocess(self) -> None:
         """
         Assemble the global stiffness matrix and external force vectors.
         """
-        for e in range(self.nel):  # loop over all elements
+        for e in range(self.shape["nel"]):  # loop over all elements
             # get global coordinates of the element nodes
             e_mask = self.conn[e, :] - 1
             xe = self.x[e_mask]  # shape: (nen, 1)
@@ -256,21 +260,21 @@ class Fem1D:
                 xi_q = xi[q].item()
                 wq = w8[q].item()
                 # call the shape function and its derivatives
-                N, gamma = self.shape1d(xi_q, self.nen)  # shape: (nen, 1)
+                N, gamma = self.shape1d(xi_q, self.shape["nen"])  # shape: (nen, 1)
 
                 # calculate the Jacobian and its inverse
-                detJq, invJq = self.jacobian1d(xe, gamma, self.nen)
+                detJq, invJq = self.jacobian1d(xe, gamma, self.shape["nen"])
 
                 # gradient of the shape functions wrt. to x
                 # G = dN/dx = dN/dξ * dξ/dx = γ * invJq	
                 G = gamma * invJq
 
-                for A in range(self.nen):  # loop over the number of nodes A
+                for A in range(self.shape["nen"]):  # loop over the number of nodes A
                     # add volume force contribution (body force)
                     a = e_mask[A]
                     self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * detJq * wq
 
-                    for B in range(self.nen):  # loop over the number of nodes B
+                    for B in range(self.shape["nen"]):  # loop over the number of nodes B
                         b = e_mask[B]
                         self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * detJq * wq
 
@@ -299,33 +303,36 @@ class Fem1D:
         # calculate reaction forces at Dirichlet boundary conditions
         self.frea = self.K @ self.u - self.fext
 
-        for e in range(self.nel):  # loop over all elements
+        for e in range(self.shape["nel"]):  # loop over all elements
             # get global coordinates of the element nodes
             xe = self.x[self.conn[e, :] - 1]
-            xi, w8 = self.gauss1d(self.nqp)
+            xi, _ = self.gauss1d(self.nqp)
 
             # for all Gauss points
             for q in range(self.nqp):
-                N, gamma = self.shape1d(xi[q].item(), self.nen)
-                detJq, invJq = self.jacobian1d(xe, gamma, self.nen)
-                G = gamma * invJq
+                N, gamma = self.shape1d(xi[q].item(), self.shape["nen"])
+                _, inv_jq = self.jacobian1d(xe, gamma, self.shape["nen"])
+                G = gamma * inv_jq
 
                 # use derivatives of shape functions, G, to calculate eps as spatial derivative of u
-                self.eps[e * self.nqp + q] = torch.tensordot(self.u[self.conn[e, :] - 1].T, G, dims=[[1], [0]])
+                self.results["eps"][e * self.nqp + q] = torch.tensordot(self.u[self.conn[e, :] - 1].T, G, dims=[[1], [0]])
                 # calculate stresses from strains and Young's modulus (i.e. apply Hooke's law)
-                self.sigma[e * self.nqp + q] = self.material.E[e, 0] * self.eps[e * self.nqp + q]
+                self.results["sigma"][e * self.nqp + q] = self.material.E[e, 0] * self.results["eps"][e * self.nqp + q]
                 # create x-axis vector to plot eps, sigma in the Gauss points (not at the nodes!)
-                self.x_eps[e * self.nqp + q] = torch.tensordot(xe, N, dims=[[0], [0]])
+                self.results["x_eps"][e * self.nqp + q] = torch.tensordot(xe, N, dims=[[0], [0]])
 
-        return self.eps, self.sigma, self.x_eps
+        return self.results["eps"], self.results["sigma"], self.results["x_eps"]
 
     def report(self) -> None:
+        """
+        Print a summary of the FEM simulation results.
+        """
         print(
                 f"""
     ===== FEM Simulation Summary =====
     Displacement @ node {self.bc.drlt_dofs.item()}: {self.u[self.bc.drlt_dofs - 1].item():.4e} m
     Max displacement         : {torch.max(torch.abs(self.u)).item():.4e} m
-    Max stress (σ)           : {torch.max(torch.abs(self.sigma)).item():.4e} Pa
+    Max stress (σ)           : {torch.max(torch.abs(self.results["sigma"])).item():.4e} Pa
     Reaction force           : {self.frea[self.bc.drlt_dofs - 1].item():.2f} N
     ==================================
     """
@@ -355,7 +362,7 @@ class Fem1D:
         plt.title("Forces")
 
         plt.subplot(4, 1, 4)
-        plt.plot(self.x_eps, self.sigma, 'x-')
+        plt.plot(self.results["x_eps"], self.results["sigma"], 'x-')
         plt.title("Stress at Gauss Points")
 
         plt.tight_layout()
@@ -364,22 +371,22 @@ class Fem1D:
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
-    x = torch.linspace(0, 70, 11).view(-1, 1)
-    conn = torch.tensor([[1, 3, 2], [3, 5, 4], [5, 7, 6], [7, 9, 8], [9, 11, 10]])
-    conn = conn[:, [0, 2, 1]]  # Reorder to [left, mid, right]
-    
-    E = 2.1e11 * torch.ones(conn.size(0), 1)
-    area = 3 * 89.9e-6 * torch.ones(conn.size(0), 1)
-    b = 7850 * 9.81
-    material = MaterialProperties(E=E, area=area, b=b)
-    
+    nodes = torch.linspace(0, 70, 11).view(-1, 1)
+    conn_list = torch.tensor([[1, 3, 2], [3, 5, 4], [5, 7, 6], [7, 9, 8], [9, 11, 10]])
+    conn_list = conn_list[:, [0, 2, 1]]  # Reorder to [left, mid, right]
+
+    E = 2.1e11 * torch.ones(conn_list.size(0), 1)
+    area = 3 * 89.9e-6 * torch.ones(conn_list.size(0), 1)
+    BODY_FORCE = 7850 * 9.81
+    mat = MaterialProperties(E=E, area=area, b=BODY_FORCE)
+
     f_sur = torch.zeros(11)
     f_sur[-1] = (300 + 75) * 9.81
     u_d = torch.tensor([0.])
     drlt_dofs = torch.tensor([1])
-    bc = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
+    boundary_conditions = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
 
-    fem = Fem1D(x, conn, material, bc, nqp=2, scalingfactor=100)
+    fem = Fem1D(nodes, conn_list, mat, boundary_conditions, nqp=2, scalingfactor=100)
     fem.preprocess()
     fem.solve()
     fem.postprocess()
