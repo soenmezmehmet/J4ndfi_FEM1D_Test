@@ -1,0 +1,17 @@
+name: Tests
+
+on: [push]
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - run: |
+        sudo apt-get update
+        sudo apt-get install gfortran libopenblas-dev liblapack-dev
+        sudo apt install python3 python3-pip python3-numpy
+    - run: |
+        sudo python3 -m pip install -r requirements.txt
+    - run: |
+        python3 -m unittest test.test_main
