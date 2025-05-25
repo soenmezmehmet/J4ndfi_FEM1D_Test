@@ -275,7 +275,7 @@ class Fem1D:
                         self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * detJq * wq
 
         # combine the force vectors
-        self.fext = self.fvol + self.bc.f_sur
+        self.fext = self.fvol + self.bc.f_sur.reshape(-1, 1)
 
     def solve(self) -> None:
         """
