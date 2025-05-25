@@ -1,8 +1,50 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
+"""
+This is a simple implementation of a 1d FEM solver based on
+a code template by Stefan Hildebrand (TU Berlin, Institute of Mechanics)
+"""
 import math
 from typing import Tuple
+from dataclasses import dataclass
+import matplotlib.pyplot as plt
+import torch
+
+
+@dataclass
+class MaterialProperties:
+    """
+    Material properties for the 1D FEM model.
+
+    Attributes
+    ----------
+    E : torch.Tensor
+        Young's modulus per element.
+    area : torch.Tensor
+        Cross-sectional area per element.
+    b : float
+        Body force per unit volume.
+    """
+    E: torch.Tensor
+    area: torch.Tensor
+    b: float
+
+
+@dataclass
+class BoundaryConditions:
+    """
+    Boundary conditions for the 1D FEM model.
+
+    Attributes
+    ----------
+    u_d : torch.Tensor
+        Dirichlet boundary condition values.
+    drltDofs : torch.Tensor
+        Indices of prescribed degrees of freedom (1-based).
+    f_sur : torch.Tensor
+        Surface force vector.
+    """
+    u_d: torch.Tensor
+    drlt_dofs: torch.Tensor
+    f_sur: torch.Tensor
 
 
 class Fem1D:
@@ -17,18 +59,6 @@ class Fem1D:
         Node coordinates.
     conn : torch.Tensor
         Connectivity matrix (element-to-node mapping).
-    E : torch.Tensor
-        Young's modulus per element.
-    area : torch.Tensor
-        Cross-sectional area per element.
-    b : float
-        Body force per unit volume.
-    f_sur : torch.Tensor
-        Surface force vector.
-    u_d : torch.Tensor
-        Dirichlet boundary condition values.
-    drltDofs : torch.Tensor
-        Indices of prescribed degrees of freedom (1-based).
     nqp : int
         Number of Gauss quadrature points.
     scalingfactor : float
@@ -41,12 +71,8 @@ class Fem1D:
         self,
         x: torch.Tensor,
         conn: torch.Tensor,
-        E: torch.Tensor,
-        area: torch.Tensor,
-        b: float,
-        f_sur: torch.Tensor,
-        u_d: torch.Tensor,
-        drltDofs: torch.Tensor,
+        material: MaterialProperties,
+        bc: BoundaryConditions,
         nqp: int = 2,
         scalingfactor: float = 1.0,
         num_threads: int = 4
@@ -60,12 +86,8 @@ class Fem1D:
         # input parameters
         self.x = x.view(-1, 1)
         self.conn = conn
-        self.E = E
-        self.area = area
-        self.b = b
-        self.f_sur = f_sur.view(-1, 1)
-        self.u_d = u_d.view(-1, 1)
-        self.drltDofs = drltDofs
+        self.material = material
+        self.bc = bc
         self.nqp = nqp
         self.scalingfactor = scalingfactor
         # derived parameters
@@ -98,7 +120,7 @@ class Fem1D:
         -------
         xi : torch.Tensor
             Quadrature points (locations ξ_i where the function is evaluated), shape (nqp,).
-        
+
         w8 : torch.Tensor
             Corresponding weights α_i for the quadrature formula, shape (nqp,).
 
@@ -246,14 +268,14 @@ class Fem1D:
                 for A in range(self.nen):  # loop over the number of nodes A
                     # add volume force contribution (body force)
                     a = e_mask[A]
-                    self.fvol[e_mask[A]] += N[A] * self.b * self.area[e] * detJq * wq
+                    self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * detJq * wq
 
                     for B in range(self.nen):  # loop over the number of nodes B
                         b = e_mask[B]
-                        self.K[a, b] = self.K[a, b] + self.E[e] * self.area[e] * G[A] * G[B] * detJq * wq
+                        self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * detJq * wq
 
         # combine the force vectors
-        self.fext = self.fvol + self.f_sur
+        self.fext = self.fvol + self.bc.f_sur
 
     def solve(self) -> None:
         """
@@ -261,14 +283,14 @@ class Fem1D:
         """
         solve_K = self.K.clone()
         # apply Dirichlet boundary conditions using penalty method
-        for i in range(self.drltDofs.size(0)):
-            solve_K[self.drltDofs[i] - 1, self.drltDofs[i] - 1] = 1e30
-            self.fext[self.drltDofs[i] - 1, 0] = 1e30 * self.u_d[i]
+        for i in range(self.bc.drlt_dofs.size(0)):
+            solve_K[self.bc.drlt_dofs[i] - 1, self.bc.drlt_dofs[i] - 1] = 1e30
+            self.fext[self.bc.drlt_dofs[i] - 1, 0] = 1e30 * self.bc.u_d[i]
 
         # solve the linear system
         self.u = torch.linalg.solve(solve_K, self.fext)
         # enforce exact values at Dirichlet DOFs
-        self.u[self.drltDofs - 1] = self.u_d
+        self.u[self.bc.drlt_dofs - 1] = self.bc.u_d
 
     def postprocess(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -291,20 +313,20 @@ class Fem1D:
                 # use derivatives of shape functions, G, to calculate eps as spatial derivative of u
                 self.eps[e * self.nqp + q] = torch.tensordot(self.u[self.conn[e, :] - 1].T, G, dims=[[1], [0]])
                 # calculate stresses from strains and Young's modulus (i.e. apply Hooke's law)
-                self.sigma[e * self.nqp + q] = self.E[e, 0] * self.eps[e * self.nqp + q]
+                self.sigma[e * self.nqp + q] = self.material.E[e, 0] * self.eps[e * self.nqp + q]
                 # create x-axis vector to plot eps, sigma in the Gauss points (not at the nodes!)
                 self.x_eps[e * self.nqp + q] = torch.tensordot(xe, N, dims=[[0], [0]])
 
         return self.eps, self.sigma, self.x_eps
 
     def report(self) -> None:
-            print(
+        print(
                 f"""
     ===== FEM Simulation Summary =====
-    Displacement @ node {self.drltDofs.item()}: {self.u[self.drltDofs - 1].item():.4e} m
+    Displacement @ node {self.bc.drlt_dofs.item()}: {self.u[self.bc.drlt_dofs - 1].item():.4e} m
     Max displacement         : {torch.max(torch.abs(self.u)).item():.4e} m
     Max stress (σ)           : {torch.max(torch.abs(self.sigma)).item():.4e} Pa
-    Reaction force           : {self.frea[self.drltDofs - 1].item():.2f} N
+    Reaction force           : {self.frea[self.bc.drlt_dofs - 1].item():.2f} N
     ==================================
     """
             )
@@ -316,7 +338,7 @@ class Fem1D:
         """
         plt.subplot(4, 1, 1)
         plt.plot(self.x, torch.zeros_like(self.x), 'ko-')
-        plt.plot(self.x[self.drltDofs - 1], -0.02 * torch.ones_like(self.drltDofs), 'g^')
+        plt.plot(self.x[self.bc.drlt_dofs - 1], -0.02 * torch.ones_like(self.bc.drlt_dofs), 'g^')
         plt.plot(self.x + self.scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
         plt.title("Deformed shape")
 
@@ -345,15 +367,19 @@ if __name__ == "__main__":
     x = torch.linspace(0, 70, 11).view(-1, 1)
     conn = torch.tensor([[1, 3, 2], [3, 5, 4], [5, 7, 6], [7, 9, 8], [9, 11, 10]])
     conn = conn[:, [0, 2, 1]]  # Reorder to [left, mid, right]
+    
     E = 2.1e11 * torch.ones(conn.size(0), 1)
     area = 3 * 89.9e-6 * torch.ones(conn.size(0), 1)
     b = 7850 * 9.81
+    material = MaterialProperties(E=E, area=area, b=b)
+    
     f_sur = torch.zeros(11)
     f_sur[-1] = (300 + 75) * 9.81
     u_d = torch.tensor([0.])
-    drltDofs = torch.tensor([1])
+    drlt_dofs = torch.tensor([1])
+    bc = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
 
-    fem = Fem1D(x, conn, E, area, b, f_sur, u_d, drltDofs, nqp=2, scalingfactor=100)
+    fem = Fem1D(x, conn, material, bc, nqp=2, scalingfactor=100)
     fem.preprocess()
     fem.solve()
     fem.postprocess()
