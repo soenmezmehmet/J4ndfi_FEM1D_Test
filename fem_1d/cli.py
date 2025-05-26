@@ -22,7 +22,10 @@ def build_solver(config: dict) -> Fem1D:
     length = float(geo["length"])
     nodes = int(geo["nodes"])
     conn = torch.tensor(geo["connectivity"], dtype=torch.int64)
-    conn = conn[:, [0, 2, 1]]  # Reorder to [left, mid, right]
+    # Ensure connectivity is in the correct order
+    # if order is 1,3,2 then reorder to 1,2,3
+    if conn[0, 1] > conn[0, 2]:
+        conn = conn[:, [0, 1, 2]]
     x = torch.linspace(0, length, nodes).view(-1, 1)
 
     # Material properties
