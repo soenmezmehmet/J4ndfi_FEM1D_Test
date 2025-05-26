@@ -61,8 +61,6 @@ class Fem1D:
         Connectivity matrix (element-to-node mapping).
     nqp : int
         Number of Gauss quadrature points.
-    scalingfactor : float
-        Scaling factor for displacement visualization.
     num_threads : int
         Number of threads used for computation.
     """
@@ -74,7 +72,6 @@ class Fem1D:
         material: MaterialProperties,
         bc: BoundaryConditions,
         nqp: int = 2,
-        scalingfactor: float = 1.0,
         num_threads: int = 4
     ):
         """
@@ -89,7 +86,6 @@ class Fem1D:
         self.material = material
         self.bc = bc
         self.nqp = nqp
-        self.scalingfactor = scalingfactor
         # derived parameters
         self.shape = {
             "nnp": x.size(0),  # number of nodal points
@@ -263,20 +259,20 @@ class Fem1D:
                 N, gamma = self.shape1d(xi_q, self.shape["nen"])  # shape: (nen, 1)
 
                 # calculate the Jacobian and its inverse
-                detJq, invJq = self.jacobian1d(xe, gamma, self.shape["nen"])
+                det_jq, inv_jq = self.jacobian1d(xe, gamma, self.shape["nen"])
 
                 # gradient of the shape functions wrt. to x
                 # G = dN/dx = dN/dξ * dξ/dx = γ * invJq	
-                G = gamma * invJq
+                G = gamma * inv_jq
 
                 for A in range(self.shape["nen"]):  # loop over the number of nodes A
                     # add volume force contribution (body force)
                     a = e_mask[A]
-                    self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * detJq * wq
+                    self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * det_jq * wq
 
                     for B in range(self.shape["nen"]):  # loop over the number of nodes B
                         b = e_mask[B]
-                        self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * detJq * wq
+                        self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * det_jq * wq
 
         # combine the force vectors
         self.fext = self.fvol + self.bc.f_sur.reshape(-1, 1)
@@ -338,15 +334,14 @@ class Fem1D:
     """
             )
 
-
-    def plot(self) -> None:
+    def plot(self, scalingfactor=100) -> None:
         """
         Plot the deformed shape, displacement, force vectors, and stress field.
         """
         plt.subplot(4, 1, 1)
         plt.plot(self.x, torch.zeros_like(self.x), 'ko-')
         plt.plot(self.x[self.bc.drlt_dofs - 1], -0.02 * torch.ones_like(self.bc.drlt_dofs), 'g^')
-        plt.plot(self.x + self.scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
+        plt.plot(self.x + scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
         plt.title("Deformed shape")
 
         plt.subplot(4, 1, 2)
@@ -376,19 +371,24 @@ if __name__ == "__main__":
     conn_list = conn_list[:, [0, 2, 1]]  # Reorder to [left, mid, right]
 
     E = 2.1e11 * torch.ones(conn_list.size(0), 1)
+    # NOTE: Three cables with the same cross-sectional area
     area = 3 * 89.9e-6 * torch.ones(conn_list.size(0), 1)
-    BODY_FORCE = 7850 * 9.81
+    # NOTE: Density is dervied from weight per unit length
+    RHO = 0.861 / 89.9e-6
+    BODY_FORCE = RHO * 9.81
+    #BODY_FORCE = 0
     mat = MaterialProperties(E=E, area=area, b=BODY_FORCE)
 
     f_sur = torch.zeros(11)
-    f_sur[-1] = (300 + 75) * 9.81
+    f_sur[-1] = (300 + 630) * 9.81
+    #f_sur[-1] = 0
     u_d = torch.tensor([0.])
     drlt_dofs = torch.tensor([1])
     boundary_conditions = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
 
-    fem = Fem1D(nodes, conn_list, mat, boundary_conditions, nqp=2, scalingfactor=100)
+    fem = Fem1D(nodes, conn_list, mat, boundary_conditions, nqp=2)
     fem.preprocess()
     fem.solve()
     fem.postprocess()
     fem.report()
-    fem.plot()
+    fem.plot(scalingfactor=100)
