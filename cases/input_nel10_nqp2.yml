@@ -1,0 +1,20 @@
+material:
+  E: 210000000000.0
+  area: 0.0002697
+  density: 9577.30812
+  gravity: 9.81
+geometry:
+  length: 70
+  nodes: 21
+  connectivity: [[1, 2, 3], [3, 4, 5], [5, 6, 7], [7, 8, 9], [9, 10, 11], [11, 12,
+      13], [13, 14, 15], [15, 16, 17], [17, 18, 19], [19, 20, 21]]
+boundary_conditions:
+  dirichlet_nodes:
+  - 1
+  dirichlet_values:
+  - 0.0
+  surface_forces: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9123.3]
+settings:
+  nqp: 2
+  scalingfactor: 100
