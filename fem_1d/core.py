@@ -61,8 +61,6 @@ class Fem1D:
         Connectivity matrix (element-to-node mapping).
     nqp : int
         Number of Gauss quadrature points.
-    scalingfactor : float
-        Scaling factor for displacement visualization.
     num_threads : int
         Number of threads used for computation.
     """
@@ -74,7 +72,6 @@ class Fem1D:
         material: MaterialProperties,
         bc: BoundaryConditions,
         nqp: int = 2,
-        scalingfactor: float = 1.0,
         num_threads: int = 4
     ):
         """
@@ -89,7 +86,6 @@ class Fem1D:
         self.material = material
         self.bc = bc
         self.nqp = nqp
-        self.scalingfactor = scalingfactor
         # derived parameters
         self.shape = {
             "nnp": x.size(0),  # number of nodal points
@@ -338,15 +334,14 @@ class Fem1D:
     """
             )
 
-
-    def plot(self) -> None:
+    def plot(self, scalingfactor=100) -> None:
         """
         Plot the deformed shape, displacement, force vectors, and stress field.
         """
         plt.subplot(4, 1, 1)
         plt.plot(self.x, torch.zeros_like(self.x), 'ko-')
         plt.plot(self.x[self.bc.drlt_dofs - 1], -0.02 * torch.ones_like(self.bc.drlt_dofs), 'g^')
-        plt.plot(self.x + self.scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
+        plt.plot(self.x + scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
         plt.title("Deformed shape")
 
         plt.subplot(4, 1, 2)
@@ -391,9 +386,9 @@ if __name__ == "__main__":
     drlt_dofs = torch.tensor([1])
     boundary_conditions = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
 
-    fem = Fem1D(nodes, conn_list, mat, boundary_conditions, nqp=2, scalingfactor=100)
+    fem = Fem1D(nodes, conn_list, mat, boundary_conditions, nqp=2)
     fem.preprocess()
     fem.solve()
     fem.postprocess()
     fem.report()
-    fem.plot()
+    fem.plot(scalingfactor=100)
