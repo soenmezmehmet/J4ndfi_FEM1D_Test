@@ -6,6 +6,7 @@ import math
 from typing import Tuple
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import torch
 
 
@@ -334,34 +335,169 @@ class Fem1D:
     """
             )
 
-    def plot(self, scalingfactor=100) -> None:
+    def plot(self, scalingfactor: float = None) -> None:
         """
-        Plot the deformed shape, displacement, force vectors, and stress field.
+        Visualize FEM results including:
+        - deformed shape,
+        - nodal displacements,
+        - force vectors,
+        - stress distribution at Gauss points.
+
+        Parameters
+        ----------
+        scalingfactor : float, optional
+            Scaling factor for displacements in the deformed shape plot.
+            If None, it is computed automatically to make deformations visible.
         """
-        plt.subplot(4, 1, 1)
-        plt.plot(self.x, torch.zeros_like(self.x), 'ko-')
-        plt.plot(self.x[self.bc.drlt_dofs - 1], -0.02 * torch.ones_like(self.bc.drlt_dofs), 'g^')
-        plt.plot(self.x + scalingfactor * self.u, torch.zeros_like(self.x), 'o-')
-        plt.title("Deformed shape")
+        # Compute automatic scaling factor if not set
+        if scalingfactor is None:
+            scalingfactor = 0.05 * (self.x[-1] - self.x[0]) / self.u.abs().max()
 
-        plt.subplot(4, 1, 2)
-        plt.plot(self.x, self.u, 'x-')
-        plt.legend(["u"])
-        plt.title("Displacement")
+        # Create subplots
+        fig = plt.figure(figsize=(10, 10))
+        gs = gridspec.GridSpec(4, 1, height_ratios=[0.45, 0.45, 0.45, 1])
+        axes = [fig.add_subplot(gs[i]) for i in range(4)]
+        fig.suptitle("1D FEM Simulation Results", fontsize=16, fontweight="bold")
 
-        plt.subplot(4, 1, 3)
-        plt.plot(self.x, self.fext, 'ro')
-        plt.plot(self.x, self.fvol, 'cx')
-        plt.plot(self.x, self.frea, 'bx')
-        plt.legend(["$f_{ext}$", "$f_{vol}$", "$f_{rea}$"])
-        plt.title("Forces")
+        x_min = self.x.min().item()
+        x_max = self.x.max().item()
 
-        plt.subplot(4, 1, 4)
-        plt.plot(self.results["x_eps"], self.results["sigma"], 'x-')
-        plt.title("Stress at Gauss Points")
+        # 1 — Deformed shape
+        # Highlight elements
+        for e in range(self.conn.size(0)):
+            idx = self.conn[e, :] - 1
+            x_elem = self.x[idx].view(-1)
+            u_elem = self.u[idx].view(-1)
+            x_def = x_elem + scalingfactor * u_elem
+            # Generate a color based on the element index, equally spaced on the color wheel
+            color = plt.cm.hsv(e / self.conn.size(0))
+            axes[0].plot(x_def, torch.zeros_like(x_def), '-', lw=6, alpha=0.3, color=color)
+        # Plot undeformed and deformed shapes
+        axes[0].plot(self.x, torch.zeros_like(self.x), 'o-', label="Undeformed", color='black')
+        axes[0].plot(self.x + scalingfactor * self.u, torch.zeros_like(self.x), 'mo:', label="Deformed (scaled)")
+        axes[0].plot(self.x[self.bc.drlt_dofs - 1], -0.02 * torch.ones_like(self.bc.drlt_dofs), 'g^', markersize=15, label="Dirichlet BC")
+        # Set plot limits and labels
+        axes[0].set_title("Deformed Shape (scaled)")
+        axes[0].set_xlabel("x [m]")
+        axes[0].set_yticks([])
+        axes[0].legend(loc="lower right")
+        axes[0].grid(True)
+        axes[0].set_xlim([x_min - 1, x_max * 1.1])
+        axes[0].set_ylim([-0.02, 0.005])
 
-        plt.tight_layout()
+        # 2 — Displacement
+        axes[1].plot(self.x, self.u, 'x-', color='blue')
+        axes[1].set_title("Displacement")
+        axes[1].set_xlabel("x [m]")
+        axes[1].set_ylabel("u(x) [m]")
+        axes[1].grid(True)
+        axes[1].set_xlim([x_min - 1, x_max * 1.1])
+        # Highlight maximum displacement
+        max_u = torch.max(self.u).item()
+        max_u_idx = torch.argmax(self.u).item()
+        x_max_u = self.x[max_u_idx].item()
+        axes[1].annotate(
+            f"Max: {max_u:.3e} m",
+            xy=(x_max_u, max_u),
+            xytext=(0, 12),
+            textcoords="offset points",
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='blue',
+            bbox=dict(boxstyle="round,pad=0.2", edgecolor='blue', facecolor='white', alpha=0.7)
+        )
+
+        # 3 — Stress distribution at Gauss points
+        axes[2].plot(self.results["x_eps"], self.results["sigma"], 'mx-', label="σ(x)")
+        axes[2].set_title("Stress Distribution (Gauss Points)")
+        axes[2].set_xlabel("x [m]")
+        axes[2].set_ylabel("σ(x) [Pa]")
+        axes[2].grid(True)
+        axes[2].legend(loc="best")
+        axes[2].set_xlim([x_min - 1, x_max * 1.1])
+        # Highlight maximum stress
+        max_sigma = torch.max(self.results["sigma"]).item()
+        max_sigma_idx = torch.argmax(self.results["sigma"]).item()
+        x_max_sigma = self.results["x_eps"][max_sigma_idx].item()
+        axes[2].annotate(
+            f"Max: {max_sigma:.3e} Pa",
+            xy=(x_max_sigma, max_sigma),
+            xytext=(0, 12),
+            textcoords="offset points",
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='magenta',
+            bbox=dict(boxstyle="round,pad=0.2", edgecolor='magenta', facecolor='white', alpha=0.7)
+        )
+
+        # 4 — Nodal force vectors
+        axes[3].scatter(self.x, self.frea, color='b', marker='s', label="$f_{rea}$")
+        axes[3].scatter(self.x, self.fext, color='r', marker='o', label="$f_{ext}$")
+        axes[3].scatter(self.x, self.fvol, color='c', marker='x', label="$f_{vol}$")
+        # accumulated body force
+        accumulated_fvol = torch.cumsum(self.fvol.flip(0), dim=0).flip(0)
+        axes[3].scatter(self.x, accumulated_fvol, color='black', marker='^', label="Σ$f_{vol}$")
+        # Highlight max external force
+        max_fext = torch.max(self.fext).item()
+        max_fext_idx = torch.argmax(self.fext).item()
+        x_max = self.x[max_fext_idx].item()
+        y_max = self.fext[max_fext_idx].item()
+        axes[3].annotate(
+            f"Max: {max_fext:.2f} N",
+            xy=(x_max, y_max),
+            xytext=(0, 12),
+            textcoords="offset points",
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='r',
+            bbox=dict(boxstyle="round,pad=0.2", edgecolor='red', facecolor='white', alpha=0.7)
+        )
+        # Highlight minimum reaction force
+        min_frea = torch.min(self.frea).item()
+        min_frea_idx = torch.argmin(self.frea).item()
+        x_min = self.x[min_frea_idx].item()
+        y_min = self.frea[min_frea_idx].item()
+        axes[3].annotate(
+            f"Min: {min_frea:.2f} N",
+            xy=(x_min, y_min),
+            xytext=(0, -12),
+            textcoords="offset points",
+            ha='center',
+            va='top',
+            fontsize=9,
+            color='b',
+            bbox=dict(boxstyle="round,pad=0.2", edgecolor='blue', facecolor='white', alpha=0.7)
+        )
+        # Highlight max accumulated body force
+        max_accumulated_fvol = torch.max(accumulated_fvol).item()
+        max_accumulated_fvol_idx = torch.argmax(accumulated_fvol).item()
+        x_max_accum = self.x[max_accumulated_fvol_idx].item()
+        y_max_accum = accumulated_fvol[max_accumulated_fvol_idx].item()
+        axes[3].annotate(
+            f"Max: {max_accumulated_fvol:.2f} N",
+            xy=(x_max_accum, y_max_accum),
+            xytext=(0, 12),
+            textcoords="offset points",
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='black',
+            bbox=dict(boxstyle="round,pad=0.2", edgecolor='black', facecolor='white', alpha=0.7)
+        )
+        # Set plot limits and labels
+        axes[3].set_title("Nodal Forces")
+        axes[3].set_xlabel("x [m]")
+        axes[3].set_ylabel("Force [N]")
+        axes[3].legend(loc="lower right")
+        axes[3].grid(True)
+        axes[3].set_xlim([x_min - 1, x_max * 1.1])
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
         plt.show()
+
 
 
 if __name__ == "__main__":
@@ -391,4 +527,4 @@ if __name__ == "__main__":
     fem.solve()
     fem.postprocess()
     fem.report()
-    fem.plot(scalingfactor=100)
+    fem.plot()
