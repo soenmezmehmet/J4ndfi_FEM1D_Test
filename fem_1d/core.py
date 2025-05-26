@@ -376,12 +376,17 @@ if __name__ == "__main__":
     conn_list = conn_list[:, [0, 2, 1]]  # Reorder to [left, mid, right]
 
     E = 2.1e11 * torch.ones(conn_list.size(0), 1)
+    # NOTE: Three cables with the same cross-sectional area
     area = 3 * 89.9e-6 * torch.ones(conn_list.size(0), 1)
-    BODY_FORCE = 7850 * 9.81
+    # NOTE: Density is dervied from weight per unit length
+    RHO = 0.861 / 89.9e-6
+    BODY_FORCE = RHO * 9.81
+    #BODY_FORCE = 0
     mat = MaterialProperties(E=E, area=area, b=BODY_FORCE)
 
     f_sur = torch.zeros(11)
-    f_sur[-1] = (300 + 75) * 9.81
+    f_sur[-1] = (300 + 630) * 9.81
+    #f_sur[-1] = 0
     u_d = torch.tensor([0.])
     drlt_dofs = torch.tensor([1])
     boundary_conditions = BoundaryConditions(u_d=u_d, drlt_dofs=drlt_dofs, f_sur=f_sur)
