@@ -263,20 +263,20 @@ class Fem1D:
                 N, gamma = self.shape1d(xi_q, self.shape["nen"])  # shape: (nen, 1)
 
                 # calculate the Jacobian and its inverse
-                detJq, invJq = self.jacobian1d(xe, gamma, self.shape["nen"])
+                det_jq, inv_jq = self.jacobian1d(xe, gamma, self.shape["nen"])
 
                 # gradient of the shape functions wrt. to x
                 # G = dN/dx = dN/dξ * dξ/dx = γ * invJq	
-                G = gamma * invJq
+                G = gamma * inv_jq
 
                 for A in range(self.shape["nen"]):  # loop over the number of nodes A
                     # add volume force contribution (body force)
                     a = e_mask[A]
-                    self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * detJq * wq
+                    self.fvol[e_mask[A]] += N[A] * self.material.b * self.material.area[e] * det_jq * wq
 
                     for B in range(self.shape["nen"]):  # loop over the number of nodes B
                         b = e_mask[B]
-                        self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * detJq * wq
+                        self.K[a, b] = self.K[a, b] + self.material.E[e] * self.material.area[e] * G[A] * G[B] * det_jq * wq
 
         # combine the force vectors
         self.fext = self.fvol + self.bc.f_sur.reshape(-1, 1)
