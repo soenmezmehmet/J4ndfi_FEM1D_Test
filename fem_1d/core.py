@@ -335,7 +335,7 @@ class Fem1D:
     """
             )
 
-    def plot(self, scalingfactor: float = None) -> None:
+    def plot(self, scalingfactor: float = None, filepath: str = None) -> None:
         """
         Visualize FEM results including:
         - deformed shape,
@@ -496,6 +496,8 @@ class Fem1D:
         axes[3].set_xlim([x_min - 1, x_max * 1.1])
 
         plt.tight_layout(rect=[0, 0, 1, 0.96])
+        if filepath is not None:
+            plt.savefig(filepath)
         plt.show()
 
 

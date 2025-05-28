@@ -57,7 +57,7 @@ def build_solver(config: dict) -> Fem1D:
     return Fem1D(x, conn, material=material, bc=bc, nqp=nqp)
 
 
-def run_simulation(filepath: str, save_fig: bool, no_plot: bool) -> None:
+def run_simulation(filepath: str, save_fig: bool, no_plot: bool, fig_path: str = None) -> None:
     """Run the full FEM simulation pipeline."""
     config = load_input_file(filepath)
     solver = build_solver(config)
@@ -68,7 +68,13 @@ def run_simulation(filepath: str, save_fig: bool, no_plot: bool) -> None:
     solver.report()  # Print results to console
 
     if not no_plot:
-        solver.plot()
+        if save_fig and fig_path:
+            solver.plot(filepath=fig_path)
+        elif save_fig:
+            # Default filename if --save-fig is set but no path is given
+            solver.plot(filepath="fem_result.png")
+        else:
+            solver.plot()
 
 
 def parse_cli() -> argparse.Namespace:
@@ -77,6 +83,7 @@ def parse_cli() -> argparse.Namespace:
     parser.add_argument("input_file", type=str, help="Path to the input YAML file")
     parser.add_argument("--no-plot", action="store_true", help="Disable plotting")
     parser.add_argument("--save-fig", action="store_true", help="Save plot as PNG instead of showing it")
+    parser.add_argument("--fig-path", type=str, default=None, help="Path to save the plot PNG file")
     return parser.parse_args()
 
 
@@ -84,4 +91,4 @@ def main():
     args = parse_cli()
     if not os.path.exists(args.input_file):
         raise FileNotFoundError(f"Input file not found: {args.input_file}")
-    run_simulation(args.input_file, save_fig=args.save_fig, no_plot=args.no_plot)
+    run_simulation(args.input_file, save_fig=args.save_fig, no_plot=args.no_plot, fig_path=args.fig_path)
