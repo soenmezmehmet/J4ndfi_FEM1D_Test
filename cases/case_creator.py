@@ -91,7 +91,7 @@ if __name__ == "__main__":
     for nel in [10, 20, 50, 100, 1000, 10000]:
         for nqp in [2, 3]:
             config = generate_quadratic_config(nel, nqp)
-            filename = f"cases/input_nel{nel}_nqp{nqp}.yml"
+            filename = f"cases/input_nel{nel}_nqp{nqp}_quadratic.yml"
             with open(filename, "w") as f:
                 yaml.dump(config, f, sort_keys=False)
 
@@ -116,7 +116,7 @@ if __name__ == "__main__":
             # Linear
             
             config = generate_linear_config(nel, nqp)
-            filename = f"cases/input_nel{nel}_nqp{nqp}.yml"
+            filename = f"cases/input_nel{nel}_nqp{nqp}_linear.yml"
             with open(filename, "w") as f:
                 yaml.dump(config, f, sort_keys=False)
 
