@@ -1,0 +1,12 @@
+name: NILFEM_py310
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - cpuonly
+  - torchaudio
+  - torchvision
+  - matplotlib
+  - ipykernel
+prefix: /home/msoenmez/miniconda3/envs/NILFEM_py310

@@ -1,0 +1,17 @@
+name: FEM_Jupyter4NFDI
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - fenics-dolfinx=0.6.0
+  - mpich
+  - pyvista[all]
+  - scipy
+  - pip
+  - pytorch
+  - cpuonly
+  - torchaudio
+  - torchvision
+  - matplotlib
+  pip:
+  - trame_jupyter_extension
