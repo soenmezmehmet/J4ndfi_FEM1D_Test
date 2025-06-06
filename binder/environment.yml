@@ -11,3 +11,5 @@ dependencies:
   - cpuonly
   - matplotlib
   - ipykernel
+pip:
+  - trame_jupyter_extension
