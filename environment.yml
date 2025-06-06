@@ -1,0 +1,11 @@
+name: NILFEM_py310
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch
+  - cpuonly
+  - torchaudio
+  - torchvision
+  - matplotlib
+  - ipykernel
