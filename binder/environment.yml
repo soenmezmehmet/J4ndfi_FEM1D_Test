@@ -3,11 +3,10 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - pytorch
-  - torchvision
-  - torchaudio
-  - cpuonly
-  - matplotlib
-  - ipykernel
+  - fenics-dolfinx=0.6.0
+  - mpich
+  - pyvista[all]
+  - scipy
+  - pip
 pip:
   - trame_jupyter_extension
