@@ -1,12 +1,17 @@
 name: NILFEM_py310
 channels:
   - conda-forge
+  - pytorch
 dependencies:
   - python=3.10
   - fenics-dolfinx=0.6.0
   - mpich
   - pyvista[all]
   - scipy
+  - pytorch
+  - cpuonly
+  - torchaudio
+  - torchvision
   - pip
 pip:
   - trame_jupyter_extension
