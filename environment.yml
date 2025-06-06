@@ -1,17 +1,12 @@
-name: FEM_Jupyter4NFDI
+name: NILFEM_py310
 channels:
-  - conda-forge
+  - defaults
 dependencies:
   - python=3.10
-  - fenics-dolfinx=0.6.0
-  - mpich
-  - pyvista[all]
-  - scipy
-  - pip
   - pytorch
   - cpuonly
   - torchaudio
   - torchvision
   - matplotlib
-  pip:
-  - trame_jupyter_extension
+  - ipykernel
+prefix: /home/msoenmez/miniconda3/envs/NILFEM_py310
