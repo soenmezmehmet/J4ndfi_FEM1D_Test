@@ -1,8 +1,6 @@
 name: NILFEM_py310
 channels:
   - conda-forge
-  - pytorch
-  - defaults
 dependencies:
   - python=3.10
   - pytorch
